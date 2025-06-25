@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import os
 import shutil
-from msbee import extract_tasks, clean_task_text, update_daily_note
+from msbee import extract_tasks, clean_task_text, update_daily_note, escape_task_query
 from unittest.mock import patch
 
 class TestMsBee(unittest.TestCase):
@@ -187,6 +187,28 @@ More content.
         self.assertIn(new_content, updated)
         self.assertIn("## Another Section", updated)
         self.assertTrue(updated.strip().endswith(new_content) or "## 🐝 MsBee" in updated)
+
+    def test_escape_task_query(self):
+        """Test the task query escaping function."""
+        test_cases = [
+            ("Simple task", "Simple task"),
+            ("Task (important)", "Task \\(important\\)"),
+            ("Task [urgent]", "Task \\[urgent\\]"),
+            ("Task {critical}", "Task \\{critical\\}"),
+            ("Task + bonus", "Task \\+ bonus"),
+            ("Task * priority", "Task \\* priority"),
+            ("Task? maybe", "Task\\? maybe"),
+            ("Task | or", "Task \\| or"),
+            ("Task ^ high", "Task \\^ high"),
+            ("Task $ expensive", "Task \\$ expensive"),
+            ("Task. period", "Task\\. period"),
+            ("Task \\ backslash", "Task \\\\ backslash"),
+            ("Task (with [multiple] {special} chars)", "Task \\(with \\[multiple\\] \\{special\\} chars\\)"),
+        ]
+        
+        for input_text, expected in test_cases:
+            with self.subTest(input_text=input_text):
+                self.assertEqual(escape_task_query(input_text), expected)
 
 if __name__ == '__main__':
     unittest.main() 

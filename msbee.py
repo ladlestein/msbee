@@ -32,6 +32,20 @@ def clean_task_text(task_text):
     clean_text = clean_text.split(" 🆔 ")[0] if " 🆔 " in clean_text else clean_text
     return clean_text
 
+def escape_task_query(text):
+    """Escape special characters for Obsidian Tasks query syntax."""
+    # Escape backslash first to avoid double-escaping
+    escaped = text.replace("\\", "\\\\")
+    # Then escape other special characters
+    escaped = escaped.replace("(", "\\(").replace(")", "\\)")
+    escaped = escaped.replace("[", "\\[").replace("]", "\\]")
+    escaped = escaped.replace("{", "\\{").replace("}", "\\}")
+    escaped = escaped.replace("+", "\\+").replace("*", "\\*")
+    escaped = escaped.replace("?", "\\?").replace("|", "\\|")
+    escaped = escaped.replace("^", "\\^").replace("$", "\\$")
+    escaped = escaped.replace(".", "\\.")
+    return escaped
+
 def extract_tasks(vault_path=None, today=date.today()):
     task_objects = {}  # Map of clean task text to Task object
     completed_tasks = set()
@@ -112,6 +126,10 @@ def extract_roadmap():
 
 # === LLM QUERY ===
 
+def has_problematic_query_chars(text):
+    # Define problematic characters for Obsidian Tasks queries
+    return any(c in text for c in '()[]{}+*?|^$\\')
+
 def ask_msbee(tasks, roadmap):
     # Format tasks with their locations for the prompt
     task_descriptions = []
@@ -122,19 +140,20 @@ def ask_msbee(tasks, roadmap):
     # Generate the tasks query conditions
     task_conditions = []
     for task_text, location in tasks[:3]:  # Take first 3 tasks
-        # Clean up the task text for the query
-        # Remove the checkbox and any trailing metadata
         clean_text = clean_task_text(task_text)
-        
-        # Get just the first few words for a unique identifier
         words = clean_text.split()
         if len(words) > 3:
             clean_text = " ".join(words[:3])
-        
-        condition = f'(path includes {location.relative_to(VAULT_PATH)}) AND (description includes {clean_text})'
+        if has_problematic_query_chars(clean_text):
+            # Use only the path filter if problematic characters are present
+            condition = f'(path includes {location.relative_to(VAULT_PATH)})'
+        else:
+            escaped_text = escape_task_query(clean_text)
+            condition = f'(path includes {location.relative_to(VAULT_PATH)}) AND (description includes {escaped_text})'
         task_conditions.append(condition)
-    
     tasks_query = " OR ".join(task_conditions)
+    if len(task_conditions) > 1:
+        tasks_query = f'({tasks_query})'
     
     prompt = f"""You are MsBee, a gentle but clever assistant. 
 Here are some open tasks:
