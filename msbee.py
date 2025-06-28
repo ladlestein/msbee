@@ -193,7 +193,7 @@ Your motivational message here
         tasks_query = ""
 
     # Reconstruct the Focus Tasks section with reasons
-    focus_md = "## 🌟 Focus Tasks\n"
+    focus_md = ""
     if tasks_query:
         focus_md += f"```tasks\n{tasks_query}\n```\n\n"
     
@@ -212,10 +212,6 @@ Your motivational message here
     quote_md = quote_section.group(0).strip() if quote_section else ''
 
     return f"""## 🌟 Focus Tasks
-```tasks
-{tasks_query}
-```
-
 {focus_md}
 {nudge_md}\n\n{quote_md}"""
 
