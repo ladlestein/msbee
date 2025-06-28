@@ -133,7 +133,7 @@ Here are your open tasks:
 And here's the user's high-level roadmap:
 {roadmap}
 
-Pick the three most important tasks for today, based on the roadmap and context. For each, copy the description and the full relative file path exactly as shown above (not just the folder), and explain in 1-2 sentences why you picked it. Respond in Markdown like this:
+Pick the three most important tasks for today, based on the roadmap and context. For each, copy the description and the full relative file path exactly as shown above (not just the folder), and explain in 1-2 sentences why you picked it. Explain it for each of the tasks you pick. Respond in Markdown like this:
 
 ## 🌟 Focus Tasks
 1. "Task description" in path/to/file.md — reason
