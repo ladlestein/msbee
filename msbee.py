@@ -226,16 +226,18 @@ def update_daily_note(content, note_date=date.today()):
     with open(daily_note, "r", encoding="utf-8") as f:
         text = f.read()
 
-    # Replace or insert the MsBee section
-    if "## 🐝 MsBee" in text:
-        updated_text = re.sub(
-            r"## 🐝 MsBee[\s\S]*?(?=\n## |\Z)",
-            f"## 🐝 MsBee\n{content}",
-            text,
-            flags=re.MULTILINE
-        )
+    # Look for the task markers
+    start_marker = "<!-- START tasks -->"
+    end_marker = "<!-- END tasks -->"
+    
+    if start_marker in text and end_marker in text:
+        # Replace content between markers
+        pattern = f"{start_marker}.*?{end_marker}"
+        replacement = f"{start_marker}\n{content}\n{end_marker}"
+        updated_text = re.sub(pattern, replacement, text, flags=re.DOTALL)
     else:
-        updated_text = text.strip() + "\n\n## 🐝 MsBee\n" + content
+        # If markers don't exist, append the content with markers
+        updated_text = text.strip() + f"\n\n{start_marker}\n{content}\n{end_marker}"
 
     with open(daily_note, "w", encoding="utf-8") as f:
         f.write(updated_text)
