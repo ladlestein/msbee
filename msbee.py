@@ -7,6 +7,7 @@ from collections import defaultdict
 from dotenv import load_dotenv
 from openai import OpenAI
 from task import Task
+from task_ids import add_task_ids_to_vault
 
 # === LOAD ENVIRONMENT VARIABLES ===
 load_dotenv()
@@ -247,6 +248,11 @@ def update_daily_note(content, note_date=date.today()):
 # === MAIN ===
 
 if __name__ == "__main__":
+    # First, ensure all open tasks have IDs
+    print("Ensuring all open tasks have unique IDs...")
+    add_task_ids_to_vault(VAULT_PATH)
+    
+    # Then proceed with the normal workflow
     tasks = extract_tasks(today=date.today())
     roadmap = extract_roadmap()
     reply = ask_msbee(tasks, roadmap)
