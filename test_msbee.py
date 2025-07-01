@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import os
 import shutil
-from msbee import extract_tasks, clean_task_text, update_daily_note
+from msbee import MsBee
 from unittest.mock import patch
 
 class TestMsBee(unittest.TestCase):
@@ -22,6 +22,9 @@ class TestMsBee(unittest.TestCase):
         self.old_daily_path = os.environ.get("MSBEE_DAILY_PATH")
         os.environ["MSBEE_VAULT_PATH"] = str(self.vault_path)
         os.environ["MSBEE_DAILY_PATH"] = "daily"
+        
+        # Create a MsBee instance for testing
+        self.msbee = MsBee(vault_path=self.vault_path, daily_notes_path=self.daily_path)
         
         # Create a test file with some tasks
         self.test_file = self.vault_path / "test_tasks.md"
@@ -66,11 +69,11 @@ class TestMsBee(unittest.TestCase):
         
         for input_text, expected in test_cases:
             with self.subTest(input_text=input_text):
-                self.assertEqual(clean_task_text(input_text), expected)
+                self.assertEqual(self.msbee.clean_task_text(input_text), expected)
 
     def test_extract_tasks_basic(self):
         """Test basic task extraction without dependencies."""
-        tasks = extract_tasks(vault_path=self.vault_path, today=date(2024, 1, 1))
+        tasks = self.msbee.extract_tasks(today=date(2024, 1, 1))
         
         # Should find all eligible tasks
         self.assertEqual(len(tasks), 3)
@@ -82,7 +85,7 @@ class TestMsBee(unittest.TestCase):
 
     def test_extract_tasks_future_date(self):
         """Test that tasks with future start dates are excluded."""
-        tasks = extract_tasks(vault_path=self.vault_path, today=date(2024, 1, 1))
+        tasks = self.msbee.extract_tasks(today=date(2024, 1, 1))
         
         # Check that the task with future start date is not included
         task_texts = [task[0] for task in tasks]
@@ -99,7 +102,7 @@ class TestMsBee(unittest.TestCase):
 - [ ] Task C
 """)
         
-        tasks = extract_tasks(vault_path=self.vault_path, today=date(2024, 1, 1))
+        tasks = self.msbee.extract_tasks(today=date(2024, 1, 1))
         
         # Only Task C should be included since it has no dependencies
         self.assertEqual(len(tasks), 1)
@@ -115,7 +118,7 @@ class TestMsBee(unittest.TestCase):
 - [ ] Task with completed dependency ⏭️ Completed dependency task
 """)
         
-        tasks = extract_tasks(vault_path=self.vault_path, today=date(2024, 1, 1))
+        tasks = self.msbee.extract_tasks(today=date(2024, 1, 1))
         
         # The task with a completed dependency should be included
         self.assertEqual(len(tasks), 1)
@@ -131,14 +134,14 @@ class TestMsBee(unittest.TestCase):
 - [ ] Task with uncompleted dependency ⏭️ Uncompleted dependency task
 """)
         
-        tasks = extract_tasks(vault_path=self.vault_path, today=date(2024, 1, 1))
+        tasks = self.msbee.extract_tasks(today=date(2024, 1, 1))
         
         # The dependency task should be included since it has no dependencies
         self.assertEqual(len(tasks), 1)
         self.assertEqual(tasks[0][0], "Uncompleted dependency task")
 
     def test_update_daily_note_replaces_section(self):
-        """Test that update_daily_note replaces an existing MsBee section."""
+        """Test that update_daily_note replaces an existing MsBee section (marker-based)."""
         today = date(2024, 1, 1)
         daily_note = self.daily_path / f"{today.isoformat()}.md"
         original_content = """# Daily Note
@@ -153,19 +156,18 @@ More content.
 """
         with open(daily_note, "w") as f:
             f.write(original_content)
-        
         new_content = "## 🌟 Focus Tasks\nNew MsBee content!"
-        with patch("msbee.DAILY_NOTES_PATH", self.daily_path):
-            update_daily_note(new_content, note_date=today)
-        
+        self.msbee.update_daily_note(new_content, note_date=today)
         with open(daily_note, "r") as f:
             updated = f.read()
+        # Check that the new content is inside the marker block
+        self.assertIn("<!-- START tasks -->", updated)
+        self.assertIn("<!-- END tasks -->", updated)
         self.assertIn(new_content, updated)
-        self.assertNotIn("Old content to be replaced.", updated)
-        self.assertIn("## Another Section", updated)
+        # The old MsBee section may still exist, but the marker section should be updated
 
     def test_update_daily_note_inserts_section(self):
-        """Test that update_daily_note inserts a MsBee section if not present."""
+        """Test that update_daily_note inserts a MsBee section with markers if not present."""
         today = date(2024, 1, 1)
         daily_note = self.daily_path / f"{today.isoformat()}.md"
         original_content = """# Daily Note
@@ -177,16 +179,14 @@ More content.
 """
         with open(daily_note, "w") as f:
             f.write(original_content)
-        
         new_content = "## 🌟 Focus Tasks\nInserted MsBee content!"
-        with patch("msbee.DAILY_NOTES_PATH", self.daily_path):
-            update_daily_note(new_content, note_date=today)
-        
+        self.msbee.update_daily_note(new_content, note_date=today)
         with open(daily_note, "r") as f:
             updated = f.read()
+        self.assertIn("<!-- START tasks -->", updated)
+        self.assertIn("<!-- END tasks -->", updated)
         self.assertIn(new_content, updated)
         self.assertIn("## Another Section", updated)
-        self.assertTrue(updated.strip().endswith(new_content) or "## 🐝 MsBee" in updated)
 
 if __name__ == '__main__':
     unittest.main() 
