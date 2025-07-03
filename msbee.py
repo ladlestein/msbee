@@ -126,10 +126,10 @@ class MsBee:
         for i, (task_text, location, task_id) in enumerate(tasks, 1):
             relative_path = location.relative_to(self.vault_path)
             clean_desc = self.clean_task_text(task_text)
-            task_descriptions.append(f'{i}. "{task_text}" in {relative_path}')
+            task_descriptions.append(f'{i}. "{task_text}" in {relative_path} (ID: {task_id})')
             task_id_map[(clean_desc, str(relative_path))] = task_id
 
-        # Prompt the LLM to select 3 tasks and explain why
+        # Prompt the LLM to select 3 tasks and explain why, returning the ID for each
         prompt = f"""
 You are MsBee, a gentle but clever assistant.
 
@@ -139,12 +139,12 @@ Here are your open tasks:
 And here's the user's high-level roadmap:
 {roadmap}
 
-Pick the three most important tasks for today, based on the roadmap and context. For each, copy the description and the full relative file path exactly as shown above (not just the folder), and explain in 1-2 sentences why you picked it. Explain it for each of the tasks you pick. Respond in Markdown like this:
+Pick the three most important tasks for today, based on the roadmap and context. For each, copy the description, the full relative file path, and the ID exactly as shown above (not just the folder), and explain in 1-2 sentences why you picked it. Respond in Markdown like this:
 
 ## 🌟 Focus Tasks
-1. "Task description" in path/to/file.md — reason
-2. "Task description" in path/to/file.md — reason
-3. "Task description" in path/to/file.md — reason
+1. "Task description" in path/to/file.md (ID: abc123) — reason
+2. "Task description" in path/to/file.md (ID: def456) — reason
+3. "Task description" in path/to/file.md (ID: ghi789) — reason
 
 ## 🐝 Nudge
 Your motivational message here
@@ -159,32 +159,31 @@ Your motivational message here
         )
         gpt_content = response.choices[0].message.content
 
-        # Parse the LLM's response to extract the 3 chosen tasks
+        # Parse the LLM's response to extract the 3 chosen tasks (with ID)
         chosen_tasks = []
         reasons = []
         focus_section = re.search(r"## 🌟 Focus Tasks(.+?)(## |$)", gpt_content, re.DOTALL)
         if focus_section:
             lines = focus_section.group(1).strip().splitlines()
             for line in lines:
-                m = re.match(r'\d+\.\s*"(.+?)" in ([^\s]+)\s*[—-]\s*(.+)', line)
+                m = re.match(r'\d+\.\s*"(.+?)" in ([^\s]+) \(ID: ([a-zA-Z0-9]{6})\)\s*[—-]\s*(.+)', line)
                 if m:
-                    desc, path, reason = m.groups()
-                    chosen_tasks.append((desc, path))
+                    desc, path, task_id, reason = m.groups()
+                    chosen_tasks.append((desc, path, task_id))
                     reasons.append(reason)
-                elif re.match(r'\d+\.\s*"(.+?)" in ([^\s]+)', line):
-                    # If no reason is given
-                    m = re.match(r'\d+\.\s*"(.+?)" in ([^\s]+)', line)
-                    desc, path = m.groups()
-                    chosen_tasks.append((desc, path))
-                    reasons.append("")
+                else:
+                    # fallback: try to match without reason
+                    m = re.match(r'\d+\.\s*"(.+?)" in ([^\s]+) \(ID: ([a-zA-Z0-9]{6})\)', line)
+                    if m:
+                        desc, path, task_id = m.groups()
+                        chosen_tasks.append((desc, path, task_id))
+                        reasons.append("")
 
         # Generate the tasks query using task IDs
         task_conditions = []
-        for desc, path in chosen_tasks:
-            clean_desc = self.clean_task_text(desc)
-            task_id = task_id_map.get((clean_desc, path))
+        for desc, path, task_id in chosen_tasks:
             if task_id:
-                condition = f'id includes {task_id}'
+                condition = f'(id includes {task_id})'
                 task_conditions.append(condition)
         
         # Create the query
@@ -198,12 +197,12 @@ Your motivational message here
         # Reconstruct the Focus Tasks section with reasons
         focus_md = ""
         if tasks_query:
-            focus_md += f"```tasks\n{tasks_query}\n```\n\n"
+            focus_md += f"```tasks\n{tasks_query}\n```\n"
         
-        for i, ((desc, path), reason) in enumerate(zip(chosen_tasks, reasons), 1):
-            focus_md += f'{i}. "{desc}" in {path}'
-            if reason:
-                focus_md += f' — {reason}'
+        for i, (desc, path, task_id) in enumerate(chosen_tasks, 1):
+            focus_md += f'{i}. "{desc}" in {path} (ID: {task_id})'
+            if reasons[i-1]:
+                focus_md += f' — {reasons[i-1]}'
             focus_md += '\n'
 
         # Reconstruct the rest of the LLM's response (nudge, quote)

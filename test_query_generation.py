@@ -18,9 +18,9 @@ def test_query_generation_basic(monkeypatch):
     # Simulate LLM response
     llm_response = '''
 ## 🌟 Focus Tasks
-1. "Do the thing 🆔 abc123" in folder1/file1.md — Most urgent
-2. "Write report 🆔 def456" in folder2/file2.md — Due soon
-3. "Plan project 🆔 ghi789" in folder3/file3.md — Important for roadmap
+1. "Do the thing 🆔 abc123" in folder1/file1.md (ID: abc123) — Most urgent
+2. "Write report 🆔 def456" in folder2/file2.md (ID: def456) — Due soon
+3. "Plan project 🆔 ghi789" in folder3/file3.md (ID: ghi789) — Important for roadmap
 
 ## 🐝 Nudge
 Keep going!
@@ -50,7 +50,7 @@ Keep going!
     # Should have a single tasks code block
     assert result.count('```tasks') == 1
     # Should have all three tasks listed
-    assert result.count('in folder') == 3
+    assert result.count('(ID: ') == 3
 
 
 def test_query_generation_partial(monkeypatch):
@@ -61,8 +61,8 @@ def test_query_generation_partial(monkeypatch):
     # Simulate LLM response with only two tasks
     llm_response = '''
 ## 🌟 Focus Tasks
-1. "Do the thing 🆔 abc123" in folder1/file1.md — Most urgent
-2. "Plan project 🆔 ghi789" in folder3/file3.md — Important for roadmap
+1. "Do the thing 🆔 abc123" in folder1/file1.md (ID: abc123) — Most urgent
+2. "Plan project 🆔 ghi789" in folder3/file3.md (ID: ghi789) — Important for roadmap
 
 ## 🐝 Nudge
 Keep going!
@@ -85,4 +85,5 @@ Keep going!
     assert 'id includes ghi789' in result
     assert 'id includes def456' not in result
     assert result.count('```tasks') == 1
+    assert result.count('(ID: ') == 2
     assert result.count('in folder') == 2 
