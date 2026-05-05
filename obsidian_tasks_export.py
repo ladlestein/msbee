@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import re
+from collections import defaultdict
 import sys
 import time
 from dataclasses import dataclass, asdict
@@ -251,9 +252,55 @@ def build_output(vault_root: Path, tasks: list[TaskRecord]) -> dict[str, Any]:
     }
 
 
+def markdown_from_tasks(payload: dict[str, Any], tasks: list[TaskRecord]) -> str:
+    vault = payload.get("vault_root", "")
+    generated = payload.get("generated_at", "")
+    summary = payload.get("summary") or {}
+    lines: list[str] = [
+        "# Open tasks (export)",
+        "",
+        f"- **Generated:** {generated}",
+        f"- **Vault:** `{vault}`",
+        f"- **Undone tasks:** {len(tasks)}",
+        "",
+    ]
+    by_status = summary.get("by_status")
+    top_tags = summary.get("top_tags")
+    if by_status:
+        lines.append("## Summary by status")
+        lines.append("")
+        for status, count in sorted(by_status.items()):
+            lines.append(f"- **{status}:** {count}")
+        lines.append("")
+    if top_tags:
+        lines.append("## Top tags")
+        lines.append("")
+        for row in top_tags[:20]:
+            lines.append(f"- `#{row['tag']}` — {row['count']}")
+        lines.append("")
+    lines.append("## Tasks by note")
+    lines.append("")
+    if not tasks:
+        lines.append("_No undone tasks._")
+        return "\n".join(lines) + "\n"
+
+    by_path: dict[str, list[TaskRecord]] = defaultdict(list)
+    for task in tasks:
+        by_path[task.path].append(task)
+
+    for rel in sorted(by_path.keys()):
+        lines.append(f"### `{rel}`")
+        lines.append("")
+        for task in sorted(by_path[rel], key=lambda t: t.line_number):
+            lines.append(task.raw_line.rstrip())
+        lines.append("")
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="export obsidian markdown tasks into one canonical json file"
+        description="export obsidian markdown tasks into json plus a companion markdown file"
     )
     parser.add_argument("vault", type=Path, help="path to obsidian vault")
     parser.add_argument(
@@ -285,6 +332,7 @@ def main() -> int:
 
     vault_root = args.vault.expanduser().resolve()
     output_path = args.output.expanduser().resolve()
+    markdown_path = output_path.with_suffix(".md")
 
     if not vault_root.exists() or not vault_root.is_dir():
         raise SystemExit(f"vault path does not exist or is not a directory: {vault_root}")
@@ -336,10 +384,15 @@ def main() -> int:
     with output_path.open("w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2 if args.pretty else None, ensure_ascii=False)
 
+    md_text = markdown_from_tasks(payload, all_tasks)
+    log(f"writing markdown: {markdown_path}")
+    with markdown_path.open("w", encoding="utf-8") as f:
+        f.write(md_text)
+
     elapsed = time.monotonic() - start_time
     log(
         f"done. wrote {len(all_tasks)} tasks from {files_with_tasks} files "
-        f"to {output_path} in {elapsed:.1f}s"
+        f"to {output_path} and {markdown_path} in {elapsed:.1f}s"
     )
     return 0
 
